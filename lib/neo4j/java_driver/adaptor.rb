@@ -18,7 +18,15 @@ module Neo4j
       end
 
       def driver_for(url)
-        self[url] ||= Java::OrgNeo4jDriverV1::GraphDatabase.driver(url)
+        uri = URI(url)
+        user = uri.user
+        password = uri.password
+        auth_token = if user
+                       Java::OrgNeo4jDriverV1::AuthTokens.basic(user, password)
+                     else
+                       Java::OrgNeo4jDriverV1::AuthTokens.none
+                     end
+        self[url] ||= Java::OrgNeo4jDriverV1::GraphDatabase.driver(url, auth_token)
       end
 
       def close(driver)
