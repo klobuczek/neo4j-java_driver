@@ -6,10 +6,18 @@ module Neo4j
       attr_reader :java_tx, :java_session
 
       def initialize(*args)
-        super
-        return unless root?
-        @java_session = session.adaptor.driver.session(org.neo4j.driver.v1.AccessMode::WRITE)
-        @java_tx = @java_session.beginTransaction
+        begin
+          super
+          return unless root?
+          @java_session = session.adaptor.driver.session(org.neo4j.driver.v1.AccessMode::WRITE)
+          @java_tx = @java_session.beginTransaction
+        rescue Exception => e
+          clean_transaction_registry
+          @java_tx.close if @java_tx
+          @java_session.close if @java_session
+          raise e
+        end
+
       end
 
       def commit
@@ -36,6 +44,12 @@ module Neo4j
 
       def root_tx
         root.java_tx
+      end
+
+      private
+
+      def clean_transaction_registry
+        Neo4j::Transaction::TransactionsRegistry.transactions_by_session_id[session.object_id] = []
       end
     end
   end
