@@ -2,7 +2,7 @@
 begin
   require 'jar_dependencies'
 rescue LoadError
-  require 'org/neo4j/driver/neo4j-java-driver/1.6.2/neo4j-java-driver-1.6.2.jar'
+  require 'org/neo4j/driver/neo4j-java-driver/1.7.0/neo4j-java-driver-1.7.0.jar'
 end
 
-require_jar 'org.neo4j.driver', 'neo4j-java-driver', '1.6.2' if defined? Jars
+require_jar 'org.neo4j.driver', 'neo4j-java-driver', '1.7.0' if defined? Jars

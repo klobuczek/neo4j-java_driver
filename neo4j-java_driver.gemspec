@@ -33,7 +33,7 @@ Gem::Specification.new do |spec|
 
   spec.platform = 'java'
 
-  spec.requirements << 'jar org.neo4j.driver, neo4j-java-driver, 1.6.2'
+  spec.requirements << 'jar org.neo4j.driver, neo4j-java-driver, 1.7.0'
 
   spec.add_runtime_dependency 'neo4j-core', '>= 9.0.0'
 
