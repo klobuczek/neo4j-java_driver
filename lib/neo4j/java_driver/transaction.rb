@@ -9,8 +9,8 @@ module Neo4j
         begin
           super
           return unless root?
-          @java_session = session.adaptor.driver.session(org.neo4j.driver.v1.AccessMode::WRITE)
-          @java_tx = @java_session.beginTransaction
+          @java_session = session.adaptor.driver.session(Neo4j::Driver::AccessMode::WRITE)
+          @java_tx = @java_session.begin_transaction
         rescue Exception => e
           clean_transaction_registry
           @java_tx.close if @java_tx
@@ -24,10 +24,8 @@ module Neo4j
         return unless root?
         begin
           @java_tx.success
-        rescue Java::OrgNeo4jGraphdb::TransactionFailureException => e
-          raise CypherError, e.message
-        ensure
           @java_tx.close
+        ensure
           @java_session.close
         end
       end

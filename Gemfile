@@ -17,6 +17,7 @@ if branch
   end
 elsif ENV['USE_LOCAL_CORE']
   gem 'neo4j-core', path: '../neo4j-core'
+  gem 'neo4j-driver', path: '../neo4j-driver'
 else
   gem 'neo4j-core'
 end

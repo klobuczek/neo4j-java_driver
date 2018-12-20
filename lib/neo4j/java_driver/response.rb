@@ -8,65 +8,59 @@ module Neo4j
       def initialize(responses, options = {})
         @wrap_level = options[:wrap_level] || Neo4j::Core::Config.wrapping_level
 
-        @results = responses.map do |response|
-          result_from_data(response.keys, response)
-        end
+        @results = responses.map(&method(:result_from_data))
       end
 
-      def result_from_data(columns, entities_data)
+      def result_from_data(entities_data)
         rows = entities_data.map do |entity_data|
-          entity_data.values.map do |value|
-            wrap_value(value)
-          end
+          wrap_value(entity_data.values)
         end
 
-        Neo4j::Core::CypherSession::Result.new(columns, rows)
+        Neo4j::Core::CypherSession::Result.new(entities_data.keys, rows)
+      end
+
+      def wrap_by_level(none_proc)
+        super(@wrap_level == :none ? none_proc.call : nil)
       end
 
       private
 
+      # In the future the ::Neo4j::Core::Node should either monkey patch or wrap Neo4j::Driver:Types::Node to avoid
+      # multiple object creation. This is probably best done once the other adapters (http, embedded) are removed.
       def wrap_node(node)
-        properties = properties(node)
-        wrap_by_level(properties) { ::Neo4j::Core::Node.new(node.id, node.labels, properties) }
+        wrap_by_level(->() { node.properties }) { ::Neo4j::Core::Node.new(node.id, node.labels, node.properties) }
       end
 
       def wrap_relationship(rel)
-        properties = properties(rel)
-        wrap_by_level(properties) do
-          ::Neo4j::Core::Relationship.new(rel.id, rel.type, properties, rel.startNodeId, rel.endNodeId)
+        wrap_by_level(->() { rel.properties }) do
+          ::Neo4j::Core::Relationship.new(rel.id, rel.type, rel.properties, rel.start_node_id, rel.end_node_id)
         end
       end
 
       def wrap_path(path)
         nodes = path.nodes
         relationships = path.relationships
-        none_value = nodes.zip(relationships).flatten.compact.map(&method(:properties))
-        wrap_by_level(none_value) do
+        wrap_by_level(->() {nodes.zip(relationships).flatten.compact.map(&:properties)}) do
           ::Neo4j::Core::Path.new(nodes.map(&method(:wrap_node)),
                                   relationships.map(&method(:wrap_relationship)),
-                                  nil)
+                                  nil) #remove directions from Path, looks like unused
         end
       end
 
       def wrap_value(value)
-        case value.type.name
-        when 'NODE'
-          wrap_node(value.asNode)
-        when 'RELATIONSHIP'
-          wrap_relationship(value.asRelationship)
-        when 'PATH'
-          wrap_path(value.asPath)
-        when 'LIST OF ANY?'
-          value.java_method(:asList, [org.neo4j.driver.v1.util.Function]).call(&method(:wrap_value)).to_a
-        when 'MAP'
-          value.asMap(->(x) { wrap_value(x) }, nil).to_hash.symbolize_keys
+        if value.kind_of? Array
+          value.map(&method(:wrap_value))
+        elsif value.kind_of? Hash
+          value.map { |key, val| [key, wrap_value(val)] }.to_h
+        elsif value.kind_of? Neo4j::Driver::Types::Node
+          wrap_node(value)
+        elsif value.kind_of? Neo4j::Driver::Types::Relationship
+          wrap_relationship(value)
+        elsif value.kind_of? Neo4j::Driver::Types::Path
+          wrap_path(value)
         else
-          value.asObject
+          value
         end
-      end
-
-      def properties(container)
-        container.asMap.to_hash
       end
     end
   end

@@ -2,7 +2,6 @@ require 'neo4j/core/cypher_session/adaptors'
 require 'neo4j/core/cypher_session/adaptors/has_uri'
 require 'neo4j/core/cypher_session/adaptors/schema'
 require 'singleton'
-require 'jruby/synchronized'
 
 module Neo4j
   module JavaDriver
@@ -11,10 +10,14 @@ module Neo4j
     # The registry allow reusage of drivers which are thread safe and conveniently closing them in one call.
     class DriverRegistry < Hash
       include Singleton
-      include JRuby::Synchronized
 
       at_exit do
         instance.close_all
+      end
+
+      def initialize
+        super
+        @mutex = Mutex.new
       end
 
       def driver_for(url)
@@ -22,11 +25,11 @@ module Neo4j
         user = uri.user
         password = uri.password
         auth_token = if user
-                       Java::OrgNeo4jDriverV1::AuthTokens.basic(user, password)
+                       Neo4j::Driver::AuthTokens.basic(user, password)
                      else
-                       Java::OrgNeo4jDriverV1::AuthTokens.none
+                       Neo4j::Driver::AuthTokens.none
                      end
-        self[url] ||= Java::OrgNeo4jDriverV1::GraphDatabase.driver(url, auth_token)
+        @mutex.synchronize { self[url] ||= Neo4j::Driver::GraphDatabase.driver(url, auth_token) }
       end
 
       def close(driver)
@@ -56,7 +59,8 @@ module Neo4j
         @options = options
       end
 
-      def connect; end
+      def connect;
+      end
 
       def close
         DriverRegistry.instance.close(@driver)
@@ -70,11 +74,11 @@ module Neo4j
         setup_queries!(queries, transaction, skip_instrumentation: options[:skip_instrumentation])
 
         responses = queries.map do |query|
-          transaction.root_tx.run(query.cypher, deep_stringify_keys(query.parameters))
+          transaction.root_tx.run(query.cypher, query.parameters)
         end
         wrap_level = options[:wrap_level] || @options[:wrap_level]
         Response.new(responses, wrap_level: wrap_level).results
-      rescue Java::OrgNeo4jDriverV1Exceptions::Neo4jException => e
+      rescue Neo4j::Driver::Exceptions::Neo4jException => e
         raise Neo4j::Core::CypherSession::CypherError.new_from(e.code, e.message) # , e.stack_track.to_a
       end
 
@@ -95,12 +99,6 @@ module Neo4j
 
         type = nil # adaptor.ssl? ? '+TLS' : ' UNSECURE'
         " #{ANSI::BLUE}BOLT#{type}:#{ANSI::CLEAR} #{ANSI::YELLOW}#{ms.round}ms#{ANSI::CLEAR} #{adaptor.url_without_password}"
-      end
-
-      private
-
-      def deep_stringify_keys(hash)
-        hash.is_a?(Hash) ? hash.map { |key, value| [key.to_s, deep_stringify_keys(value)] }.to_h : hash
       end
     end
   end

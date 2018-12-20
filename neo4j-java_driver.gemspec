@@ -31,11 +31,8 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ['lib']
 
-  spec.platform = 'java'
-
-  spec.requirements << 'jar org.neo4j.driver, neo4j-java-driver, 1.7.0'
-
   spec.add_runtime_dependency 'neo4j-core', '>= 9.0.0'
+  spec.add_runtime_dependency 'neo4j-driver'
 
   spec.add_development_dependency 'bundler', '~> 1.16'
   spec.add_development_dependency 'dotenv'
